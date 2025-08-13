@@ -109,10 +109,28 @@ function handleFile(file) {
     }
     currentFile = file;
     currentFileType = isImage ? 'image' : 'json';
+    // Show file summary
+    showFileSummary(file);
     if (isImage) displayImagePreview(file);
     else hideImagePreview();
     elements.passwordInput.disabled = false;
     updateButtonStates();
+}
+
+function showFileSummary(file) {
+    let summary = document.getElementById('fileSummary');
+    if (!summary) {
+        summary = document.createElement('div');
+        summary.id = 'fileSummary';
+        summary.setAttribute('aria-live', 'polite');
+        summary.style.margin = '8px 0';
+        summary.style.fontSize = '0.98em';
+        elements.dropZone.parentNode.insertBefore(summary, elements.dropZone.nextSibling);
+    }
+    const type = file.type || 'Desconocido';
+    const size = (file.size / 1024).toFixed(1) + ' KB';
+    summary.innerHTML = `<strong>Archivo:</strong> ${escapeHTML(file.name)}<br><strong>Tamaño:</strong> ${size}<br><strong>Tipo:</strong> ${escapeHTML(type)}`;
+    summary.style.display = 'block';
 }
 
 function displayImagePreview(file) {
@@ -124,8 +142,14 @@ function displayImagePreview(file) {
             const ctx = canvas.getContext('2d');
             let { width, height } = img;
             const maxW = 400, maxH = 300;
-            if (width > maxW) { height *= maxW / width; width = maxW; }
-            if (height > maxH) { width *= maxH / height; height = maxH; }
+            // Rendimiento: Si la imagen es muy grande, muestra miniatura primero
+            if (width > 1200 || height > 900) {
+                width = Math.min(width, maxW);
+                height = Math.min(height, maxH);
+            } else {
+                if (width > maxW) { height *= maxW / width; width = maxW; }
+                if (height > maxH) { width *= maxH / height; height = maxH; }
+            }
             canvas.width = width;
             canvas.height = height;
             ctx.drawImage(img, 0, 0, width, height);
@@ -269,6 +293,11 @@ function resetApp() {
     // Clear sensitive variables
     currentFile = null;
     currentFileType = null;
+    // Terminate worker for security
+    if (cryptoWorker) {
+        cryptoWorker.terminate();
+        cryptoWorker = null;
+    }
     // Reset file input
     elements.fileInput.value = '';
     // Reset password input
@@ -276,6 +305,9 @@ function resetApp() {
     elements.passwordInput.disabled = true;
     // Hide preview
     hideImagePreview();
+    // Hide file summary
+    const fileSummary = document.getElementById('fileSummary');
+    if (fileSummary) fileSummary.style.display = 'none';
     // Hide status message
     elements.statusMessage.textContent = '';
     elements.statusMessage.className = 'status-message';
@@ -289,6 +321,8 @@ function resetApp() {
     elements.dropZone.classList.remove('drag-over');
     // Show initial status
     showStatus('Aplicación lista. Selecciona una imagen o archivo JSON.', 'info');
+    // Re-initialize worker
+    initializeWorker();
 }
 
 // =================== UTILIDADES ===================
