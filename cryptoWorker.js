@@ -1,21 +1,31 @@
+// Worker: Robust error handling, input validation, and comments
 self.onmessage = async e => {
     const { action, data } = e.data;
     try {
+        if (!data || typeof action !== 'string') throw new Error('Datos de entrada inválidos');
         if (action === 'encrypt') {
+            if (!data.imageData || !data.password || typeof data.password !== 'string' || data.password.length < 6) {
+                throw new Error('Datos o contraseña inválidos para encriptar');
+            }
             const res = await encryptImage(data.imageData, data.password);
+            if (data.mimeType) res.mimeType = data.mimeType;
             self.postMessage({ success: true, result: res });
         } else if (action === 'decrypt') {
+            if (!data.encryptedData || !data.password || typeof data.password !== 'string' || data.password.length < 1) {
+                throw new Error('Datos o contraseña inválidos para desencriptar');
+            }
             const res = await decryptImage(data.encryptedData, data.password);
             self.postMessage({ success: true, result: res });
         } else {
             throw new Error('Acción no reconocida');
         }
     } catch (err) {
-        self.postMessage({ success: false, error: err.message });
+        self.postMessage({ success: false, error: err.message || 'Error desconocido en el worker' });
     }
 };
 
 async function deriveKey(password, salt) {
+    // Derive AES-GCM key from password and salt
     const enc = new TextEncoder();
     const keyMaterial = await crypto.subtle.importKey(
         'raw', enc.encode(password),
@@ -32,6 +42,8 @@ async function deriveKey(password, salt) {
 }
 
 async function encryptImage(buffer, password) {
+    // Encrypt image buffer with password
+    if (!buffer || !password) throw new Error('Datos de imagen o contraseña faltantes');
     const salt = crypto.getRandomValues(new Uint8Array(16));
     const iv = crypto.getRandomValues(new Uint8Array(12));
     const key = await deriveKey(password, salt);
@@ -40,7 +52,11 @@ async function encryptImage(buffer, password) {
 }
 
 async function decryptImage(data, password) {
+    // Decrypt image buffer with password
     try {
+        if (!data || !data.salt || !data.iv || !data.encryptedData || !password) {
+            throw new Error('Datos de entrada incompletos para desencriptar');
+        }
         const salt = new Uint8Array(data.salt);
         const iv = new Uint8Array(data.iv);
         const encrypted = new Uint8Array(data.encryptedData);

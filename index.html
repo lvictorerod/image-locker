@@ -1,63 +1,114 @@
 <!-- Security: Content Security Policy -->
 <meta charset="UTF-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self';">
-<!-- Add missing DOM elements required by the script -->
+<meta http-equiv="Content-Security-Policy"
+      content="default-src 'self';
+               style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
+               font-src 'self' https://fonts.gstatic.com;
+               img-src 'self' data: blob:;">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
 <style>
     :root {
-        --bg-color: #fff;
+        --bg-color: #f7f9fb;
         --text-color: #222;
-        --border-color: #aaa;
-        --input-bg: #f9f9f9;
-        --input-border: #ccc;
-        --accent: #3399ff;
-        --dropzone-hover-bg: #f0f8ff;
+        --border-color: #b0b8c1;
+        --input-bg: #fff;
+        --input-border: #b0b8c1;
+        --accent: #2563eb;
+        --accent-light: #60a5fa;
+        --dropzone-hover-bg: #e0e7ef;
+        --card-bg: #fff;
+        --shadow: 0 4px 24px rgba(37,99,235,0.07);
     }
     [data-theme="dark"] {
-        --bg-color: #181818;
+        --bg-color: #181a1b;
         --text-color: #eee;
         --border-color: #444;
         --input-bg: #222;
         --input-border: #555;
-        --accent: #66aaff;
+        --accent: #60a5fa;
+        --accent-light: #2563eb;
         --dropzone-hover-bg: #222a33;
+        --card-bg: #222;
+        --shadow: 0 4px 24px rgba(96,165,250,0.07);
     }
     body, html {
         background: var(--bg-color);
         color: var(--text-color);
+        font-family: 'Roboto', 'Segoe UI', Arial, sans-serif;
+        min-height: 100vh;
+        margin: 0;
         transition: background 0.2s, color 0.2s;
-        font-family: 'Segoe UI', 'Roboto', Arial, sans-serif;
     }
-    #dropZone {
+    main {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        min-height: 100vh;
+    }
+    .card {
+        background: var(--card-bg);
+        border-radius: 18px;
+        box-shadow: var(--shadow);
+        padding: 32px 24px 24px 24px;
+        max-width: 420px;
+        width: 100%;
+        margin: 32px auto;
+        display: flex;
+        flex-direction: column;
+        gap: 24px;
+    }
+    .card-header {
+        text-align: center;
+        font-size: 1.5em;
+        font-weight: 700;
+        margin-bottom: 8px;
+        letter-spacing: 0.5px;
+    }
+    .dropzone {
         border: 2.5px dashed var(--border-color);
         background: var(--input-bg);
         color: var(--text-color);
         border-radius: 16px;
         box-shadow: 0 2px 12px rgba(0,0,0,0.04);
         transition: background 0.2s, border-color 0.2s;
-        position: relative;
         min-height: 120px;
         font-size: 1.1em;
         font-weight: 500;
         user-select: none;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        position: relative;
+        outline: none;
     }
-    #dropZone .drop-icon {
+    .dropzone:focus {
+        border-color: var(--accent);
+        box-shadow: 0 0 0 3px var(--accent-light);
+    }
+    .dropzone.drag-over {
+        background: var(--dropzone-hover-bg);
+        border-color: var(--accent);
+        box-shadow: 0 4px 16px rgba(37,99,235,0.08);
+    }
+    .drop-icon {
         font-size: 2.5em;
         color: var(--accent);
         margin-bottom: 8px;
         display: block;
     }
-    #dropZone .drop-instructions {
+    .drop-instructions {
         display: block;
         margin-bottom: 4px;
+        font-size: 1.08em;
     }
-    #dropZone .drop-hint {
+    .drop-hint {
         font-size: 0.95em;
         color: var(--border-color);
-    }
-    #dropZone.drag-over {
-        background: var(--dropzone-hover-bg);
-        border-color: var(--accent);
-        box-shadow: 0 4px 16px rgba(51,153,255,0.08);
     }
     input[type="password"], input[type="text"] {
         background: var(--input-bg);
@@ -68,10 +119,18 @@
         font-size: 1em;
         margin-right: 6px;
         transition: border-color 0.2s;
+        width: 100%;
+        box-sizing: border-box;
     }
     input[type="password"]:focus, input[type="text"]:focus {
         border-color: var(--accent);
         outline: none;
+    }
+    .input-group {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 8px;
     }
     button {
         background: var(--accent);
@@ -83,7 +142,7 @@
         cursor: pointer;
         margin: 0 4px;
         transition: background 0.2s, box-shadow 0.2s;
-        box-shadow: 0 1px 4px rgba(51,153,255,0.08);
+        box-shadow: 0 1px 4px rgba(37,99,235,0.08);
     }
     button:disabled {
         background: var(--input-border);
@@ -99,6 +158,10 @@
         cursor: pointer;
         box-shadow: none;
         padding: 0;
+        position: absolute;
+        top: 18px;
+        right: 18px;
+        z-index: 1000;
     }
     .status-message {
         background: var(--input-bg);
@@ -109,7 +172,9 @@
         display: inline-block;
         font-size: 1.05em;
         margin-top: 8px;
-        box-shadow: 0 2px 8px rgba(51,153,255,0.07);
+        box-shadow: 0 2px 8px rgba(37,99,235,0.07);
+        min-width: 220px;
+        text-align: center;
     }
     .status-success {
         border-color: #4caf50;
@@ -123,25 +188,28 @@
         border-color: var(--accent);
         color: var(--accent);
     }
-    .drag-over {
-        background: var(--dropzone-hover-bg);
-        border-color: var(--accent);
+    .preview-container {
+        display: none;
+        text-align: center;
+        margin-bottom: 16px;
     }
-    .container {
-        max-width: 480px;
-        margin: 0 auto;
-        padding: 18px 12px 32px 12px;
-        background: var(--input-bg);
-        border-radius: 18px;
-        box-shadow: 0 4px 24px rgba(51,153,255,0.07);
-        transition: background 0.2s;
+    .preview-container.active {
+        display: block;
+    }
+    #previewCanvas {
+        border:2px solid var(--accent);
+        border-radius:10px;
+        margin-bottom:10px;
+        box-shadow:0 2px 8px rgba(37,99,235,0.07);
+        max-width:100%;
+        background:var(--input-bg);
     }
     @media (max-width: 600px) {
-        .container {
+        .card {
             max-width: 99vw;
             padding: 8px 2vw 24px 2vw;
         }
-        #dropZone {
+        .dropzone {
             width: 99vw !important;
             min-height: 90px;
             font-size: 0.98em;
@@ -151,32 +219,32 @@
         }
     }
 </style>
-<main class="container" aria-label="Locker de imágenes">
-    <section>
-        <div id="dropZone" role="button" aria-label="Zona de arrastre para archivos" tabindex="0" style="width: 420px; height: 140px; display: flex; flex-direction: column; align-items: center; justify-content: center; margin: 40px auto 10px auto; cursor: pointer;">
-                <span class="drop-icon" aria-hidden="true">🗂️</span>
-                <span class="drop-instructions">Arrastra aquí una imagen o JSON</span>
-                <span class="drop-hint">o haz clic para seleccionar archivo</span>
-                <input id="fileInput" type="file" accept="image/*,application/json" style="display:none;" aria-label="Seleccionar archivo de imagen o JSON">
-        </div>
-    </section>
-    <section style="text-align:center; margin-bottom: 10px;">
-        <input id="passwordInput" type="password" placeholder="Contraseña (mínimo 6 caracteres)" disabled style="width: 200px;" title="Introduce una contraseña para encriptar/desencriptar" aria-label="Contraseña">
-        <button id="passwordToggle" type="button" title="Mostrar/ocultar contraseña" aria-label="Mostrar u ocultar contraseña">👁️</button>
-    </section>
-    <section id="previewContainer" style="display:none; text-align:center; margin-bottom: 16px;">
-        <canvas id="previewCanvas" style="border:2px solid var(--accent); border-radius:10px; margin-bottom:10px; box-shadow:0 2px 8px rgba(51,153,255,0.07); max-width:100%; background:var(--input-bg);" aria-label="Vista previa de la imagen"></canvas>
-    </section>
-    <section style="text-align:center; margin-bottom: 10px;">
-        <button id="encryptBtn" disabled title="Encripta la imagen seleccionada" aria-label="Encriptar imagen">Encriptar <span id="encryptSpinner" class="hidden" aria-hidden="true">⏳</span></button>
-        <button id="decryptBtn" disabled title="Desencripta el archivo JSON seleccionado" aria-label="Desencriptar archivo JSON">Desencriptar <span id="decryptSpinner" class="hidden" aria-hidden="true">⏳</span></button>
-    </section>
-    <section>
-        <div id="statusMessage" class="status-message" style="display:none; text-align:center; margin-bottom:10px; min-width:220px;" role="alert" aria-live="assertive"></div>
-    </section>
-    <!-- Theme Toggle Button -->
-    <button id="themeToggle" style="position: absolute; top: 10px; right: 10px; z-index: 1000; background: none; border: none; font-size: 1.5em; cursor: pointer;">
-            <span id="themeIcon">🌙</span>
+<main aria-label="Locker de imágenes">
+    <button id="themeToggle" title="Cambiar tema" aria-label="Cambiar tema">
+        <span id="themeIcon">🌙</span>
     </button>
+    <section class="card" aria-labelledby="app-title">
+        <header class="card-header" id="app-title">Locker de Imágenes</header>
+        <div id="dropZone" class="dropzone" role="button" aria-label="Zona de arrastre para archivos" tabindex="0">
+            <span class="drop-icon" aria-hidden="true">🗂️</span>
+            <span class="drop-instructions">Arrastra aquí una imagen o JSON</span>
+            <span class="drop-hint">o haz clic para seleccionar archivo</span>
+            <input id="fileInput" type="file" accept="image/*,application/json" style="display:none;" aria-label="Seleccionar archivo de imagen o JSON">
+        </div>
+        <div class="input-group">
+            <input id="passwordInput" type="password" placeholder="Contraseña (mínimo 6 caracteres)" disabled title="Introduce una contraseña para encriptar/desencriptar" aria-label="Contraseña">
+            <button id="passwordToggle" type="button" title="Mostrar/ocultar contraseña" aria-label="Mostrar u ocultar contraseña">👁️</button>
+        </div>
+        <div class="preview-container" id="previewContainer">
+            <canvas id="previewCanvas" aria-label="Vista previa de la imagen"></canvas>
+        </div>
+        <div style="text-align:center; margin-bottom: 10px;">
+            <button id="actionBtn" disabled title="Encripta o desencripta según el archivo seleccionado" aria-label="Acción principal">
+                <span id="actionBtnText">Encriptar</span>
+                <span id="actionSpinner" class="hidden" aria-hidden="true">⏳</span>
+            </button>
+        </div>
+        <div id="statusMessage" class="status-message" role="alert" aria-live="assertive"></div>
+    </section>
 </main>
 <script src="main.js"></script>
