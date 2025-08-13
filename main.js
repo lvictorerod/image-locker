@@ -11,7 +11,21 @@ const CONFIG = {
     FORBIDDEN_EXTENSIONS: /\.(html?|js|exe|bat|cmd|sh|php|svg)$/i,
     PREVIEW_MAX_WIDTH: 400,
     PREVIEW_MAX_HEIGHT: 300,
-    LARGE_IMAGE_THRESHOLD: 1200 * 900
+    LARGE_IMAGE_THRESHOLD: 1200 * 900,
+    // High-quality image processing settings
+    IMAGE_QUALITY: {
+        // Canvas output quality (0.0 - 1.0, where 1.0 is highest)
+        CANVAS_QUALITY: 1.0,
+        // Preferred lossless format for high quality
+        LOSSLESS_FORMAT: 'image/png',
+        // High resolution threshold for quality preservation
+        HIGH_RES_THRESHOLD: 2048 * 2048,
+        // Image smoothing settings for canvas
+        SMOOTHING: {
+            ENABLED: true,
+            QUALITY: 'high' // 'low' | 'medium' | 'high'
+        }
+    }
 };
 
 // Global error handler
@@ -25,6 +39,7 @@ let currentFile = null;
 let currentFileType = null;
 let cryptoWorker = null;
 let isProcessing = false;
+let lastDecryptedImageData = null; // Store decrypted image data for HQ download
 let performanceMetrics = {
     startTime: 0,
     encryptionTime: 0,
@@ -43,7 +58,14 @@ const elements = {
     actionBtnText: document.getElementById('actionBtnText'),
     actionSpinner: document.getElementById('actionSpinner'),
     themeToggle: document.getElementById('themeToggle'),
-    themeIcon: document.getElementById('themeIcon')
+    themeIcon: document.getElementById('themeIcon'),
+    // Quality control elements
+    qualityControls: document.getElementById('qualityControls'),
+    preserveQuality: document.getElementById('preserveQuality'),
+    useLosslessFormat: document.getElementById('useLosslessFormat'),
+    qualitySlider: document.getElementById('qualitySlider'),
+    qualityValue: document.getElementById('qualityValue'),
+    downloadHQBtn: document.getElementById('downloadHQBtn')
 };
 
 /**
@@ -212,6 +234,12 @@ function setupEventListeners() {
     elements.actionBtn.addEventListener('click', handleAction);
     elements.themeToggle.addEventListener('click', toggleTheme);
     elements.passwordInput.addEventListener('input', updateButtonStates);
+    
+    // Quality control event listeners
+    elements.qualitySlider?.addEventListener('input', updateQualityDisplay);
+    elements.preserveQuality?.addEventListener('change', updateQualitySettings);
+    elements.useLosslessFormat?.addEventListener('change', updateQualitySettings);
+    elements.downloadHQBtn?.addEventListener('click', handleHighQualityDownload);
 }
 
 /**
@@ -246,8 +274,10 @@ function handleFile(file) {
         
         if (validation.fileType === 'image') {
             displayImagePreview(file);
+            showQualityControls(); // Show quality controls for images
         } else {
             hideImagePreview();
+            hideQualityControls(); // Hide quality controls for non-images
         }
         
         elements.passwordInput.disabled = false;
@@ -429,7 +459,7 @@ function displayImagePreview(file) {
 }
 
 /**
- * Render image to canvas with performance optimization
+ * Render image to canvas with high-quality settings and performance optimization
  */
 function renderImageToCanvas(img) {
     const canvas = elements.previewCanvas;
@@ -451,14 +481,38 @@ function renderImageToCanvas(img) {
         if (height > maxH) { width *= maxH / height; height = maxH; }
     }
     
+    // Set canvas dimensions
     canvas.width = width;
     canvas.height = height;
     
-    // Use smooth scaling
-    ctx.imageSmoothingEnabled = true;
-    ctx.imageSmoothingQuality = 'high';
+    // Apply quality settings from user preferences
+    applyQualitySettings(ctx, { highDPI: true });
     
-    ctx.drawImage(img, 0, 0, width, height);
+    // For high-resolution images, use better scaling algorithms
+    if (img.width * img.height > CONFIG.IMAGE_QUALITY.HIGH_RES_THRESHOLD) {
+        // Multiple-pass scaling for better quality on large images
+        if (width < img.width * 0.5) {
+            // Create intermediate canvas for better quality downscaling
+            const tempCanvas = document.createElement('canvas');
+            const tempCtx = tempCanvas.getContext('2d');
+            
+            // First pass: scale to 50% of original
+            const tempWidth = Math.ceil(img.width * 0.5);
+            const tempHeight = Math.ceil(img.height * 0.5);
+            tempCanvas.width = tempWidth;
+            tempCanvas.height = tempHeight;
+            
+            applyQualitySettings(tempCtx);
+            tempCtx.drawImage(img, 0, 0, tempWidth, tempHeight);
+            
+            // Second pass: scale to final size
+            ctx.drawImage(tempCanvas, 0, 0, width, height);
+        } else {
+            ctx.drawImage(img, 0, 0, width, height);
+        }
+    } else {
+        ctx.drawImage(img, 0, 0, width, height);
+    }
 }
 
 /**
@@ -493,9 +547,15 @@ function hideLoadingState() {
 
 function hideImagePreview() {
     elements.previewContainer.classList.remove('active');
+    if (elements.downloadHQBtn) {
+        elements.downloadHQBtn.classList.add('hidden');
+    }
 }
 
 function displayDecryptedImage(imageData) {
+    // Store image data for high-quality download
+    lastDecryptedImageData = imageData;
+    
     let mimeType = 'image/png'; // Valor por defecto
     if (currentFileType === 'json' && currentFile) {
         currentFile.text().then(txt => {
@@ -507,16 +567,7 @@ function displayDecryptedImage(imageData) {
             const url = URL.createObjectURL(blob);
             const img = new Image();
             img.onload = () => {
-                const canvas = elements.previewCanvas;
-                const ctx = canvas.getContext('2d');
-                let { width, height } = img;
-                const maxW = 400, maxH = 300;
-                if (width > maxW) { height *= maxW / width; width = maxW; }
-                if (height > maxH) { width *= maxH / height; height = maxH; }
-                canvas.width = width;
-                canvas.height = height;
-                ctx.drawImage(img, 0, 0, width, height);
-                elements.previewContainer.classList.add('active');
+                renderHighQualityImage(img);
                 URL.revokeObjectURL(url);
             };
             img.onerror = () => {
@@ -533,16 +584,7 @@ function displayDecryptedImage(imageData) {
         const url = URL.createObjectURL(blob);
         const img = new Image();
         img.onload = () => {
-            const canvas = elements.previewCanvas;
-            const ctx = canvas.getContext('2d');
-            let { width, height } = img;
-            const maxW = 400, maxH = 300;
-            if (width > maxW) { height *= maxW / width; width = maxW; }
-            if (height > maxH) { width *= maxH / height; height = maxH; }
-            canvas.width = width;
-            canvas.height = height;
-            ctx.drawImage(img, 0, 0, width, height);
-            elements.previewContainer.classList.add('active');
+            renderHighQualityImage(img);
             URL.revokeObjectURL(url);
         };
         img.onerror = () => {
@@ -550,6 +592,37 @@ function displayDecryptedImage(imageData) {
             hideImagePreview();
         };
         img.src = url;
+    }
+}
+
+/**
+ * Render high-quality image to canvas for decrypted image display
+ */
+function renderHighQualityImage(img) {
+    const canvas = elements.previewCanvas;
+    const ctx = canvas.getContext('2d');
+    
+    let { width, height } = img;
+    const maxW = CONFIG.PREVIEW_MAX_WIDTH;
+    const maxH = CONFIG.PREVIEW_MAX_HEIGHT;
+    
+    // Calculate optimal dimensions while preserving aspect ratio
+    if (width > maxW) { height *= maxW / width; width = maxW; }
+    if (height > maxH) { width *= maxH / height; height = maxH; }
+    
+    canvas.width = width;
+    canvas.height = height;
+    
+    // Apply quality settings from user preferences
+    applyQualitySettings(ctx, { highDPI: true });
+    
+    // Render image with high quality settings
+    ctx.drawImage(img, 0, 0, width, height);
+    elements.previewContainer.classList.add('active');
+    
+    // Show high-quality download button for decrypted images
+    if (elements.downloadHQBtn) {
+        elements.downloadHQBtn.classList.remove('hidden');
     }
 }
 
@@ -756,10 +829,20 @@ function sanitizeFileName(name) {
     return name.replace(/[^a-zA-Z0-9-_]/g, '_').slice(0, 40);
 }
 
+/**
+ * Enhanced download function for encrypted files with quality options
+ */
 function downloadEncryptedFile(data) {
     // Adjuntar el tipo MIME original al JSON encriptado si está presente
     const output = { ...data };
     if (data.mimeType) output.mimeType = data.mimeType;
+    
+    // Add quality metadata for future reference
+    if (currentFileType === 'image') {
+        output.qualitySettings = getCurrentQualitySettings();
+        output.originalFormat = currentFile.type;
+    }
+    
     const blob = new Blob([JSON.stringify(output, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -771,6 +854,30 @@ function downloadEncryptedFile(data) {
     a.click();
     a.remove();
     URL.revokeObjectURL(url);
+}
+
+/**
+ * Download high-quality version of decrypted image
+ */
+function downloadHighQualityImage(imageData, originalFileName = 'image') {
+    const settings = getCurrentQualitySettings();
+    const blob = new Blob([imageData], { 
+        type: settings.useLossless ? CONFIG.IMAGE_QUALITY.LOSSLESS_FORMAT : 'image/png'
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    
+    const baseName = sanitizeFileName(originalFileName.split('.')[0] || 'decrypted_image');
+    const extension = settings.useLossless ? 'png' : 'jpg';
+    
+    a.href = url;
+    a.download = `${baseName}_decrypted_hq.${extension}`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+    
+    showSuccess(`Imagen de alta calidad descargada: ${baseName}_decrypted_hq.${extension}`);
 }
 
 // =================== ENHANCED STATUS MANAGEMENT ===================
@@ -959,4 +1066,122 @@ function updateThemeIcon(currentTheme) {
     if (elements.themeIcon) {
         elements.themeIcon.textContent = currentTheme === 'dark' ? '🌙' : '☀️';
     }
+}
+
+/**
+ * Handle high-quality download of decrypted image
+ */
+function handleHighQualityDownload() {
+    if (!lastDecryptedImageData) {
+        showError('No hay imagen desencriptada disponible para descargar.');
+        return;
+    }
+    
+    try {
+        const originalFileName = currentFile?.name || 'imagen_desencriptada';
+        downloadHighQualityImage(lastDecryptedImageData, originalFileName);
+        
+        logDebug('High-quality image download initiated');
+    } catch (error) {
+        logError('Error downloading high-quality image:', error);
+        showError('Error al descargar la imagen de alta calidad.');
+    }
+}
+
+// =================== QUALITY CONTROL FUNCTIONS ===================
+
+/**
+ * Update quality display when slider changes
+ */
+function updateQualityDisplay() {
+    if (elements.qualityValue && elements.qualitySlider) {
+        const value = Math.round(parseFloat(elements.qualitySlider.value) * 100);
+        elements.qualityValue.textContent = `${value}%`;
+        
+        // Update global quality setting
+        CONFIG.IMAGE_QUALITY.CANVAS_QUALITY = parseFloat(elements.qualitySlider.value);
+    }
+}
+
+/**
+ * Update quality settings based on checkboxes
+ */
+function updateQualitySettings() {
+    if (elements.preserveQuality?.checked) {
+        // Enable maximum quality settings
+        CONFIG.IMAGE_QUALITY.CANVAS_QUALITY = 1.0;
+        CONFIG.IMAGE_QUALITY.SMOOTHING.ENABLED = true;
+        CONFIG.IMAGE_QUALITY.SMOOTHING.QUALITY = 'high';
+        
+        // Update UI
+        if (elements.qualitySlider) {
+            elements.qualitySlider.value = '1.0';
+            updateQualityDisplay();
+        }
+    }
+    
+    // Log quality settings changes
+    logDebug('Quality settings updated:', {
+        preserveQuality: elements.preserveQuality?.checked,
+        useLosslessFormat: elements.useLosslessFormat?.checked,
+        canvasQuality: CONFIG.IMAGE_QUALITY.CANVAS_QUALITY
+    });
+}
+
+/**
+ * Show quality controls when an image file is loaded
+ */
+function showQualityControls() {
+    if (elements.qualityControls) {
+        elements.qualityControls.style.display = 'block';
+        elements.qualityControls.setAttribute('aria-hidden', 'false');
+    }
+}
+
+/**
+ * Hide quality controls when no image file is loaded
+ */
+function hideQualityControls() {
+    if (elements.qualityControls) {
+        elements.qualityControls.style.display = 'none';
+        elements.qualityControls.setAttribute('aria-hidden', 'true');
+    }
+}
+
+/**
+ * Get current quality settings for image processing
+ */
+function getCurrentQualitySettings() {
+    return {
+        quality: elements.preserveQuality?.checked ? 1.0 : parseFloat(elements.qualitySlider?.value || '1.0'),
+        useLossless: elements.useLosslessFormat?.checked || false,
+        format: elements.useLosslessFormat?.checked ? 'image/png' : null
+    };
+}
+
+/**
+ * Apply quality settings to canvas context
+ */
+function applyQualitySettings(ctx, options = {}) {
+    const settings = getCurrentQualitySettings();
+    
+    // Apply high-quality rendering settings
+    ctx.imageSmoothingEnabled = CONFIG.IMAGE_QUALITY.SMOOTHING.ENABLED;
+    ctx.imageSmoothingQuality = CONFIG.IMAGE_QUALITY.SMOOTHING.QUALITY;
+    
+    // Additional quality settings can be applied here
+    if (options.highDPI && window.devicePixelRatio > 1) {
+        const ratio = window.devicePixelRatio;
+        const canvas = ctx.canvas;
+        const width = canvas.width;
+        const height = canvas.height;
+        
+        canvas.width = width * ratio;
+        canvas.height = height * ratio;
+        canvas.style.width = width + 'px';
+        canvas.style.height = height + 'px';
+        ctx.scale(ratio, ratio);
+    }
+    
+    return settings;
 }

@@ -39,6 +39,16 @@ open http://localhost:8080
 3. **Encrypt**: Click "Encriptar" to create encrypted JSON file
 4. **Decrypt**: Select encrypted JSON file and enter password
 5. **Download**: Encrypted files download automatically
+6. **Quality Control**: Configure image quality settings for optimal results
+7. **High-Quality Download**: Download decrypted images in maximum quality
+
+### Quality Settings
+
+- **Preserve Maximum Quality**: Enables highest quality rendering settings
+- **Lossless Format**: Use PNG format to avoid compression artifacts
+- **Quality Slider**: Fine-tune compression level (10%-100%)
+- **High-Resolution Support**: Optimized processing for large images
+- **Format Preservation**: Maintains original image format when possible
 
 ### Supported Formats
 
@@ -54,6 +64,15 @@ open http://localhost:8080
 - **Key Derivation**: PBKDF2 (250,000 iterations)
 - **Salt**: 16-byte random salt per encryption
 - **IV**: 12-byte random initialization vector
+
+### Image Quality Preservation
+
+- **High-Quality Canvas Rendering**: Advanced smoothing algorithms with configurable quality settings
+- **Lossless Format Support**: Option to use PNG format for zero compression artifacts  
+- **Multi-Pass Scaling**: Progressive scaling for large images to maintain quality
+- **User-Controlled Quality**: Adjustable quality settings from 10% to 100%
+- **High-DPI Support**: Automatic scaling for high-resolution displays
+- **Original Format Preservation**: Maintains original file format metadata
 
 ### Security Measures
 

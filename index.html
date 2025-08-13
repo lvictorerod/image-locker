@@ -480,8 +480,32 @@
             <input id="passwordInput" type="password" placeholder="Contraseña (mínimo 6 caracteres)" disabled title="Introduce una contraseña para encriptar/desencriptar" aria-label="Contraseña">
             <button id="passwordToggle" type="button" title="Mostrar/ocultar contraseña" aria-label="Mostrar u ocultar contraseña">👁️</button>
         </div>
+        <div class="quality-controls" id="qualityControls" style="display: none; margin: 12px 0; padding: 12px; background: var(--input-bg); border-radius: 8px; border: 1px solid var(--input-border);">
+            <div style="display: block; margin-bottom: 8px; font-weight: 500; color: var(--text-color);">
+                ⚙️ Opciones de Calidad
+            </div>
+            <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 8px;">
+                <label style="display: flex; align-items: center; gap: 4px; font-size: 0.9em;">
+                    <input type="checkbox" id="preserveQuality" checked aria-label="Preservar máxima calidad">
+                    Máxima calidad
+                </label>
+                <label style="display: flex; align-items: center; gap: 4px; font-size: 0.9em;">
+                    <input type="checkbox" id="useLosslessFormat" aria-label="Usar formato PNG sin pérdida">
+                    Formato sin pérdida (PNG)
+                </label>
+            </div>
+            <div style="display: flex; align-items: center; gap: 8px; font-size: 0.9em;">
+                <label for="qualitySlider" style="color: var(--text-color);">Calidad:</label>
+                <input type="range" id="qualitySlider" min="0.1" max="1.0" step="0.1" value="1.0" style="flex: 1;" aria-label="Control de calidad de imagen">
+                <span id="qualityValue" style="min-width: 35px; color: var(--accent);">100%</span>
+            </div>
+        </div>
         <div class="preview-container" id="previewContainer">
             <canvas id="previewCanvas" aria-label="Vista previa de la imagen"></canvas>
+            <button id="downloadHQBtn" class="hidden" style="margin-top: 8px; padding: 8px 16px; font-size: 0.9em; background: var(--success-color);" 
+                    title="Descargar imagen de alta calidad" aria-label="Descargar imagen desencriptada en alta calidad">
+                📥 Descargar HQ
+            </button>
         </div>
         <div style="text-align:center; margin-bottom: 10px;">
             <button id="actionBtn" disabled title="Encripta o desencripta según el archivo seleccionado" aria-label="Acción principal">
