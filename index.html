@@ -1,3 +1,6 @@
+<!-- Security: Content Security Policy -->
+<meta charset="UTF-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self';">
 <!-- Add missing DOM elements required by the script -->
 <style>
     :root {
@@ -6,6 +9,8 @@
         --border-color: #aaa;
         --input-bg: #f9f9f9;
         --input-border: #ccc;
+        --accent: #3399ff;
+        --dropzone-hover-bg: #f0f8ff;
     }
     [data-theme="dark"] {
         --bg-color: #181818;
@@ -13,332 +18,165 @@
         --border-color: #444;
         --input-bg: #222;
         --input-border: #555;
+        --accent: #66aaff;
+        --dropzone-hover-bg: #222a33;
     }
     body, html {
         background: var(--bg-color);
         color: var(--text-color);
         transition: background 0.2s, color 0.2s;
+        font-family: 'Segoe UI', 'Roboto', Arial, sans-serif;
     }
     #dropZone {
-        border-color: var(--border-color);
+        border: 2.5px dashed var(--border-color);
         background: var(--input-bg);
         color: var(--text-color);
+        border-radius: 16px;
+        box-shadow: 0 2px 12px rgba(0,0,0,0.04);
+        transition: background 0.2s, border-color 0.2s;
+        position: relative;
+        min-height: 120px;
+        font-size: 1.1em;
+        font-weight: 500;
+        user-select: none;
+    }
+    #dropZone .drop-icon {
+        font-size: 2.5em;
+        color: var(--accent);
+        margin-bottom: 8px;
+        display: block;
+    }
+    #dropZone .drop-instructions {
+        display: block;
+        margin-bottom: 4px;
+    }
+    #dropZone .drop-hint {
+        font-size: 0.95em;
+        color: var(--border-color);
+    }
+    #dropZone.drag-over {
+        background: var(--dropzone-hover-bg);
+        border-color: var(--accent);
+        box-shadow: 0 4px 16px rgba(51,153,255,0.08);
     }
     input[type="password"], input[type="text"] {
         background: var(--input-bg);
         color: var(--text-color);
         border: 1px solid var(--input-border);
+        border-radius: 6px;
+        padding: 7px 12px;
+        font-size: 1em;
+        margin-right: 6px;
+        transition: border-color 0.2s;
+    }
+    input[type="password"]:focus, input[type="text"]:focus {
+        border-color: var(--accent);
+        outline: none;
+    }
+    button {
+        background: var(--accent);
+        color: #fff;
+        border: none;
+        border-radius: 6px;
+        padding: 7px 16px;
+        font-size: 1em;
+        cursor: pointer;
+        margin: 0 4px;
+        transition: background 0.2s, box-shadow 0.2s;
+        box-shadow: 0 1px 4px rgba(51,153,255,0.08);
+    }
+    button:disabled {
+        background: var(--input-border);
+        color: #aaa;
+        cursor: not-allowed;
+        box-shadow: none;
+    }
+    #themeToggle {
+        background: none;
+        color: var(--accent);
+        border: none;
+        font-size: 1.7em;
+        cursor: pointer;
+        box-shadow: none;
+        padding: 0;
     }
     .status-message {
         background: var(--input-bg);
         color: var(--text-color);
-        border: 1px solid var(--input-border);
-        border-radius: 4px;
-        padding: 6px 12px;
+        border: 2px solid var(--accent);
+        border-radius: 8px;
+        padding: 10px 18px;
         display: inline-block;
+        font-size: 1.05em;
+        margin-top: 8px;
+        box-shadow: 0 2px 8px rgba(51,153,255,0.07);
+    }
+    .status-success {
+        border-color: #4caf50;
+        color: #4caf50;
+    }
+    .status-error {
+        border-color: #e53935;
+        color: #e53935;
+    }
+    .status-info {
+        border-color: var(--accent);
+        color: var(--accent);
     }
     .drag-over {
-        background: #e0e0ff;
-        border-color: #3399ff;
+        background: var(--dropzone-hover-bg);
+        border-color: var(--accent);
+    }
+    .container {
+        max-width: 480px;
+        margin: 0 auto;
+        padding: 18px 12px 32px 12px;
+        background: var(--input-bg);
+        border-radius: 18px;
+        box-shadow: 0 4px 24px rgba(51,153,255,0.07);
+        transition: background 0.2s;
+    }
+    @media (max-width: 600px) {
+        .container {
+            max-width: 99vw;
+            padding: 8px 2vw 24px 2vw;
+        }
+        #dropZone {
+            width: 99vw !important;
+            min-height: 90px;
+            font-size: 0.98em;
+        }
+        #previewCanvas {
+            max-width: 99vw !important;
+        }
     }
 </style>
-<div id="dropZone" style="width: 420px; height: 320px; border: 2px dashed #aaa; display: flex; align-items: center; justify-content: center; margin: 40px auto 10px auto; cursor: pointer;">
-    Arrastra aquí una imagen o JSON, o haz clic para seleccionar.
-    <input id="fileInput" type="file" accept="image/*,application/json" style="display:none;">
-</div>
-<div style="text-align:center; margin-bottom: 10px;">
-    <input id="passwordInput" type="password" placeholder="Contraseña" disabled style="width: 200px;">
-    <button id="passwordToggle" type="button">👁️</button>
-</div>
-<div id="previewContainer" style="display:none; text-align:center;">
-    <canvas id="previewCanvas" style="border:1px solid #ccc; margin-bottom:10px;"></canvas>
-</div>
-<div style="text-align:center; margin-bottom: 10px;">
-    <button id="encryptBtn" disabled>Encriptar <span id="encryptSpinner" class="hidden">⏳</span></button>
-    <button id="decryptBtn" disabled>Desencriptar <span id="decryptSpinner" class="hidden">⏳</span></button>
-</div>
-
-<div id="statusMessage" class="status-message" style="display:none; text-align:center; margin-bottom:10px;"></div>
-<!-- Theme Toggle Button -->
-<button id="themeToggle" style="position: absolute; top: 10px; right: 10px; z-index: 1000; background: none; border: none; font-size: 1.5em; cursor: pointer;">
-    <span id="themeIcon">🌙</span>
-</button>
-<script>
-document.addEventListener('DOMContentLoaded', initializeApp);
-
-let currentFile = null;
-let currentFileType = null;
-let cryptoWorker = null;
-
-const elements = {
-    dropZone: document.getElementById('dropZone'),
-    fileInput: document.getElementById('fileInput'),
-    passwordInput: document.getElementById('passwordInput'),
-    passwordToggle: document.getElementById('passwordToggle'),
-    previewContainer: document.getElementById('previewContainer'),
-    previewCanvas: document.getElementById('previewCanvas'),
-    statusMessage: document.getElementById('statusMessage'),
-    encryptBtn: document.getElementById('encryptBtn'),
-    decryptBtn: document.getElementById('decryptBtn'),
-    encryptSpinner: document.getElementById('encryptSpinner'),
-    decryptSpinner: document.getElementById('decryptSpinner'),
-    themeToggle: document.getElementById('themeToggle'),
-    themeIcon: document.getElementById('themeIcon')
-};
-
-function initializeApp() {
-    initializeTheme();
-    setupEventListeners();
-    initializeWorker();
-    showStatus('Aplicación lista. Selecciona una imagen o archivo JSON.', 'info');
-}
-
-// =================== WORKER ===================
-function initializeWorker() {
-    const workerCode = `
-    self.onmessage = async e => {
-        const { action, data } = e.data;
-        try {
-            if (action === 'encrypt') {
-                const res = await encryptImage(data.imageData, data.password);
-                self.postMessage({ success: true, result: res });
-            } else if (action === 'decrypt') {
-                const res = await decryptImage(data.encryptedData, data.password);
-                self.postMessage({ success: true, result: res });
-            } else {
-                throw new Error('Acción no reconocida');
-            }
-        } catch (err) {
-            self.postMessage({ success: false, error: err.message });
-        }
-    };
-
-    async function deriveKey(password, salt) {
-        const enc = new TextEncoder();
-        const keyMaterial = await crypto.subtle.importKey(
-            'raw', enc.encode(password),
-            { name: 'PBKDF2' }, false,
-            ['deriveKey']
-        );
-        return crypto.subtle.deriveKey(
-            { name: 'PBKDF2', salt, iterations: 250000, hash: 'SHA-256' },
-            keyMaterial,
-            { name: 'AES-GCM', length: 256 },
-            false,
-            ['encrypt', 'decrypt']
-        );
-    }
-
-    async function encryptImage(buffer, password) {
-        const salt = crypto.getRandomValues(new Uint8Array(16));
-        const iv = crypto.getRandomValues(new Uint8Array(12));
-        const key = await deriveKey(password, salt);
-        const encrypted = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, buffer);
-        return { salt: [...salt], iv: [...iv], encryptedData: [...new Uint8Array(encrypted)] };
-    }
-
-    async function decryptImage(data, password) {
-        try {
-            const salt = new Uint8Array(data.salt);
-            const iv = new Uint8Array(data.iv);
-            const encrypted = new Uint8Array(data.encryptedData);
-            const key = await deriveKey(password, salt);
-            const decrypted = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, encrypted);
-            return new Uint8Array(decrypted);
-        } catch {
-            throw new Error('Contraseña incorrecta o archivo dañado');
-        }
-    }
-    `;
-    const blob = new Blob([workerCode], { type: 'application/javascript' });
-    cryptoWorker = new Worker(URL.createObjectURL(blob));
-
-    cryptoWorker.onmessage = e => {
-        const { success, result, error } = e.data;
-        if (success) {
-            if (result.salt) {
-                downloadEncryptedFile(result);
-                showStatus('Imagen encriptada exitosamente.', 'success');
-            } else {
-                displayDecryptedImage(result);
-                showStatus('Imagen desencriptada exitosamente.', 'success');
-            }
-        } else {
-            showStatus(error, 'error');
-        }
-        setProcessing(false);
-    };
-}
-
-// =================== UI ===================
-function setupEventListeners() {
-    // Bloquear drop global que recarga página
-    document.addEventListener('dragover', e => e.preventDefault());
-    document.addEventListener('drop', e => e.preventDefault());
-
-    elements.dropZone.addEventListener('dragover', e => {
-        e.preventDefault();
-        elements.dropZone.classList.add('drag-over');
-    });
-    elements.dropZone.addEventListener('dragleave', () => elements.dropZone.classList.remove('drag-over'));
-    elements.dropZone.addEventListener('drop', e => {
-        e.preventDefault();
-        elements.dropZone.classList.remove('drag-over');
-        if (e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0]);
-    });
-    elements.dropZone.addEventListener('click', () => elements.fileInput.click());
-    elements.fileInput.addEventListener('change', e => {
-        if (e.target.files[0]) handleFile(e.target.files[0]);
-    });
-
-    elements.passwordToggle.addEventListener('click', togglePasswordVisibility);
-    elements.encryptBtn.addEventListener('click', handleEncrypt);
-    elements.decryptBtn.addEventListener('click', handleDecrypt);
-    elements.themeToggle.addEventListener('click', toggleTheme);
-    elements.passwordInput.addEventListener('input', updateButtonStates);
-}
-
-function handleFile(file) {
-    const isImage = file.type.startsWith('image/') || /\.(png|jpe?g|gif|bmp|webp)$/i.test(file.name);
-    const isJSON = file.type === 'application/json' || file.name.toLowerCase().endsWith('.json');
-    if (!isImage && !isJSON) {
-        showStatus('Archivo no válido. Selecciona imagen o JSON.', 'error');
-        return;
-    }
-    currentFile = file;
-    currentFileType = isImage ? 'image' : 'json';
-    if (isImage) displayImagePreview(file);
-    else hideImagePreview();
-    elements.passwordInput.disabled = false;
-    updateButtonStates();
-}
-
-function displayImagePreview(file) {
-    const reader = new FileReader();
-    reader.onload = e => {
-        const img = new Image();
-        img.onload = () => {
-            const canvas = elements.previewCanvas;
-            const ctx = canvas.getContext('2d');
-            let { width, height } = img;
-            const maxW = 400, maxH = 300;
-            if (width > maxW) { height *= maxW / width; width = maxW; }
-            if (height > maxH) { width *= maxH / height; height = maxH; }
-            canvas.width = width;
-            canvas.height = height;
-            ctx.drawImage(img, 0, 0, width, height);
-            elements.previewContainer.style.display = 'block';
-        };
-        img.src = e.target.result;
-    };
-    reader.readAsDataURL(file);
-}
-
-function hideImagePreview() {
-    elements.previewContainer.style.display = 'none';
-}
-
-function displayDecryptedImage(imageData) {
-    const blob = new Blob([imageData]);
-    const url = URL.createObjectURL(blob);
-    const img = new Image();
-    img.onload = () => {
-        const canvas = elements.previewCanvas;
-        const ctx = canvas.getContext('2d');
-        let { width, height } = img;
-        const maxW = 400, maxH = 300;
-        if (width > maxW) { height *= maxW / width; width = maxW; }
-        if (height > maxH) { width *= maxH / height; height = maxH; }
-        canvas.width = width;
-        canvas.height = height;
-        ctx.drawImage(img, 0, 0, width, height);
-        elements.previewContainer.style.display = 'block';
-        URL.revokeObjectURL(url);
-    };
-    img.src = url;
-}
-
-// =================== ACCIONES ===================
-function handleEncrypt() {
-    if (!currentFile) return;
-    const password = elements.passwordInput.value.trim();
-    if (password.length < 6) return showStatus('Contraseña mínima de 6 caracteres.', 'error');
-    setProcessing(true, 'encrypt');
-    currentFile.arrayBuffer().then(buf => {
-        cryptoWorker.postMessage({ action: 'encrypt', data: { imageData: buf, password } });
-    });
-}
-
-function handleDecrypt() {
-    if (!currentFile) return;
-    const password = elements.passwordInput.value.trim();
-    if (!password) return showStatus('Ingrese contraseña.', 'error');
-    setProcessing(true, 'decrypt');
-    currentFile.text().then(txt => {
-        const data = JSON.parse(txt);
-        cryptoWorker.postMessage({ action: 'decrypt', data: { encryptedData: data, password } });
-    });
-}
-
-function downloadEncryptedFile(data) {
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${currentFile.name.split('.')[0]}_encrypted.json`;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    URL.revokeObjectURL(url);
-}
-
-// =================== UTILIDADES ===================
-function showStatus(msg, type) {
-    elements.statusMessage.textContent = msg;
-    elements.statusMessage.className = `status-message status-${type}`;
-    elements.statusMessage.style.display = 'block';
-}
-
-function updateButtonStates() {
-    const hasPass = elements.passwordInput.value.trim().length > 0;
-    elements.encryptBtn.disabled = !(currentFileType === 'image' && hasPass);
-    elements.decryptBtn.disabled = !(currentFileType === 'json' && hasPass);
-}
-
-function togglePasswordVisibility() {
-    const isPass = elements.passwordInput.type === 'password';
-    elements.passwordInput.type = isPass ? 'text' : 'password';
-    elements.passwordToggle.textContent = isPass ? '🙈' : '👁️';
-}
-
-function setProcessing(state, type = '') {
-    elements.passwordInput.disabled = state;
-    elements.encryptBtn.disabled = state;
-    elements.decryptBtn.disabled = state;
-    elements.fileInput.disabled = state;
-    elements.encryptSpinner.classList.toggle('hidden', !(state && type === 'encrypt'));
-    elements.decryptSpinner.classList.toggle('hidden', !(state && type === 'decrypt'));
-    if (!state) updateButtonStates();
-}
-
-function initializeTheme() {
-    const theme = localStorage.getItem('theme') || 'light';
-    document.documentElement.setAttribute('data-theme', theme);
-    updateThemeIcon(theme);
-}
-
-function toggleTheme() {
-    const currentTheme = document.documentElement.getAttribute('data-theme');
-    const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
-    document.documentElement.setAttribute('data-theme', newTheme);
-    localStorage.setItem('theme', newTheme);
-    updateThemeIcon(newTheme);
-}
-
-function updateThemeIcon(currentTheme) {
-    // Show the icon for the theme you will switch to
-    if (elements.themeIcon) {
-        elements.themeIcon.textContent = currentTheme === 'dark' ? '🌙' : '☀️';
-    }
-}
-</script>
+<main class="container" aria-label="Locker de imágenes">
+    <section>
+        <div id="dropZone" role="button" aria-label="Zona de arrastre para archivos" tabindex="0" style="width: 420px; height: 140px; display: flex; flex-direction: column; align-items: center; justify-content: center; margin: 40px auto 10px auto; cursor: pointer;">
+                <span class="drop-icon" aria-hidden="true">🗂️</span>
+                <span class="drop-instructions">Arrastra aquí una imagen o JSON</span>
+                <span class="drop-hint">o haz clic para seleccionar archivo</span>
+                <input id="fileInput" type="file" accept="image/*,application/json" style="display:none;" aria-label="Seleccionar archivo de imagen o JSON">
+        </div>
+    </section>
+    <section style="text-align:center; margin-bottom: 10px;">
+        <input id="passwordInput" type="password" placeholder="Contraseña (mínimo 6 caracteres)" disabled style="width: 200px;" title="Introduce una contraseña para encriptar/desencriptar" aria-label="Contraseña">
+        <button id="passwordToggle" type="button" title="Mostrar/ocultar contraseña" aria-label="Mostrar u ocultar contraseña">👁️</button>
+    </section>
+    <section id="previewContainer" style="display:none; text-align:center; margin-bottom: 16px;">
+        <canvas id="previewCanvas" style="border:2px solid var(--accent); border-radius:10px; margin-bottom:10px; box-shadow:0 2px 8px rgba(51,153,255,0.07); max-width:100%; background:var(--input-bg);" aria-label="Vista previa de la imagen"></canvas>
+    </section>
+    <section style="text-align:center; margin-bottom: 10px;">
+        <button id="encryptBtn" disabled title="Encripta la imagen seleccionada" aria-label="Encriptar imagen">Encriptar <span id="encryptSpinner" class="hidden" aria-hidden="true">⏳</span></button>
+        <button id="decryptBtn" disabled title="Desencripta el archivo JSON seleccionado" aria-label="Desencriptar archivo JSON">Desencriptar <span id="decryptSpinner" class="hidden" aria-hidden="true">⏳</span></button>
+    </section>
+    <section>
+        <div id="statusMessage" class="status-message" style="display:none; text-align:center; margin-bottom:10px; min-width:220px;" role="alert" aria-live="assertive"></div>
+    </section>
+    <!-- Theme Toggle Button -->
+    <button id="themeToggle" style="position: absolute; top: 10px; right: 10px; z-index: 1000; background: none; border: none; font-size: 1.5em; cursor: pointer;">
+            <span id="themeIcon">🌙</span>
+    </button>
+</main>
+<script src="main.js"></script>
