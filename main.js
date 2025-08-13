@@ -1,18 +1,35 @@
-document.addEventListener('DOMContentLoaded', initializeApp);
-// Accessibility: Keyboard support for drop zone
-document.addEventListener('DOMContentLoaded', () => {
-    const dropZone = document.getElementById('dropZone');
-    dropZone.addEventListener('keydown', function(e) {
-        if (e.key === 'Enter' || e.key === ' ') {
-            e.preventDefault();
-            elements.fileInput.click();
-        }
-    });
-});
+/**
+ * Image Locker - Production Ready Application
+ * Secure image encryption/decryption with modern web technologies
+ */
 
+// Production constants
+const CONFIG = {
+    MAX_FILE_SIZE: 50 * 1024 * 1024, // 50MB
+    MIN_PASSWORD_LENGTH: 6,
+    ALLOWED_IMAGE_TYPES: ['image/png', 'image/jpeg', 'image/gif', 'image/bmp', 'image/webp'],
+    FORBIDDEN_EXTENSIONS: /\.(html?|js|exe|bat|cmd|sh|php|svg)$/i,
+    PREVIEW_MAX_WIDTH: 400,
+    PREVIEW_MAX_HEIGHT: 300,
+    LARGE_IMAGE_THRESHOLD: 1200 * 900
+};
+
+// Global error handler
+window.addEventListener('error', handleGlobalError);
+window.addEventListener('unhandledrejection', handleUnhandledRejection);
+
+document.addEventListener('DOMContentLoaded', initializeApp);
+
+// Application state
 let currentFile = null;
 let currentFileType = null;
 let cryptoWorker = null;
+let isProcessing = false;
+let performanceMetrics = {
+    startTime: 0,
+    encryptionTime: 0,
+    decryptionTime: 0
+};
 
 const elements = {
     dropZone: document.getElementById('dropZone'),
@@ -29,31 +46,145 @@ const elements = {
     themeIcon: document.getElementById('themeIcon')
 };
 
+/**
+ * Initialize the application with all components
+ */
 function initializeApp() {
-    initializeTheme();
-    setupEventListeners();
-    initializeWorker();
-    showStatus('Aplicación lista. Selecciona una imagen o archivo JSON.', 'info');
+    try {
+        // Check browser compatibility
+        if (!checkBrowserSupport()) {
+            showError('Su navegador no soporta las funciones necesarias para esta aplicación.');
+            return;
+        }
+
+        initializeTheme();
+        setupEventListeners();
+        initializeWorker();
+        setupAccessibility();
+        
+        // Register service worker for offline support
+        registerServiceWorker();
+        
+        logDebug('Application initialized successfully');
+        showStatus('Aplicación lista. Selecciona una imagen o archivo JSON.', 'info');
+    } catch (error) {
+        handleGlobalError(error);
+    }
+}
+
+/**
+ * Check if browser supports required features
+ */
+function checkBrowserSupport() {
+    return !!(
+        window.crypto?.subtle && 
+        window.Worker && 
+        window.FileReader && 
+        HTMLCanvasElement.prototype.getContext
+    );
+}
+
+/**
+ * Register service worker for offline functionality
+ */
+async function registerServiceWorker() {
+    if ('serviceWorker' in navigator) {
+        try {
+            const registration = await navigator.serviceWorker.register('./sw.js');
+            logDebug('Service Worker registered:', registration);
+        } catch (error) {
+            logDebug('Service Worker registration failed:', error);
+        }
+    }
+}
+
+/**
+ * Setup accessibility features
+ */
+function setupAccessibility() {
+    // Keyboard support for drop zone
+    elements.dropZone.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            elements.fileInput.click();
+        }
+    });
+
+    // Focus management
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Tab') {
+            document.body.classList.add('keyboard-navigation');
+        }
+    });
+
+    document.addEventListener('mousedown', function() {
+        document.body.classList.remove('keyboard-navigation');
+    });
+}
+
+/**
+ * Global error handlers
+ */
+function handleGlobalError(error) {
+    logError('Global error:', error);
+    showError('Ha ocurrido un error inesperado. Por favor, recarga la página.');
+}
+
+function handleUnhandledRejection(event) {
+    logError('Unhandled promise rejection:', event.reason);
+    showError('Error en la aplicación. Por favor, intenta de nuevo.');
 }
 
 // =================== WORKER ===================
+/**
+ * Initialize crypto worker with error handling and performance monitoring
+ */
 function initializeWorker() {
-    cryptoWorker = new Worker('cryptoWorker.js');
-    cryptoWorker.onmessage = e => {
-        const { success, result, error } = e.data;
-        if (success) {
-            if (result.salt) {
-                downloadEncryptedFile(result);
-                resetApp(); // Reset everything after encryption
-            } else {
-                displayDecryptedImage(result);
-                showStatus('Imagen desencriptada exitosamente.', 'success');
+    try {
+        cryptoWorker = new Worker('cryptoWorker.js');
+        
+        cryptoWorker.onmessage = e => {
+            const { success, result, error } = e.data;
+            
+            try {
+                if (success) {
+                    if (result.salt) {
+                        // Encryption completed
+                        performanceMetrics.encryptionTime = Date.now() - performanceMetrics.startTime;
+                        logDebug(`Encryption completed in ${performanceMetrics.encryptionTime}ms`);
+                        
+                        downloadEncryptedFile(result);
+                        showSuccess('Imagen encriptada exitosamente.');
+                        resetApp();
+                    } else {
+                        // Decryption completed
+                        performanceMetrics.decryptionTime = Date.now() - performanceMetrics.startTime;
+                        logDebug(`Decryption completed in ${performanceMetrics.decryptionTime}ms`);
+                        
+                        displayDecryptedImage(result);
+                        showSuccess('Imagen desencriptada exitosamente.');
+                    }
+                } else {
+                    logError('Worker error:', error);
+                    showError(error || 'Error en el procesamiento');
+                }
+            } catch (err) {
+                handleGlobalError(err);
+            } finally {
+                setProcessing(false);
             }
-        } else {
-            showStatus(error, 'error');
-        }
-        setProcessing(false);
-    };
+        };
+
+        cryptoWorker.onerror = (error) => {
+            logError('Worker error event:', error);
+            showError('Error en el worker de encriptación');
+            setProcessing(false);
+        };
+
+    } catch (error) {
+        logError('Failed to initialize worker:', error);
+        showError('No se pudo inicializar el sistema de encriptación');
+    }
 }
 
 // =================== UI ===================
@@ -83,89 +214,281 @@ function setupEventListeners() {
     elements.passwordInput.addEventListener('input', updateButtonStates);
 }
 
+/**
+ * Enhanced file handler with comprehensive validation and security
+ */
 function handleFile(file) {
-    const forbiddenExt = /\.(html?|js|exe|bat|cmd|sh|php|svg)$/i;
-    const isImage = file.type.startsWith('image/') || /\.(png|jpe?g|gif|bmp|webp)$/i.test(file.name);
-    const isJSON = file.type === 'application/json' || file.name.toLowerCase().endsWith('.json');
-    if (forbiddenExt.test(file.name)) {
-        showStatus('Tipo de archivo no permitido por seguridad.', 'error');
+    try {
+        logDebug('Processing file:', file.name, file.size, file.type);
+
+        // Comprehensive validation
+        const validation = validateFile(file);
+        if (!validation.isValid) {
+            showError(validation.error);
+            hideImagePreview();
+            clearFileSummary();
+            return;
+        }
+
+        // Security check for file content (basic)
+        if (file.name.includes('..') || file.name.includes('/') || file.name.includes('\\')) {
+            showError('Nombre de archivo no válido por seguridad.');
+            hideImagePreview();
+            clearFileSummary();
+            return;
+        }
+
+        currentFile = file;
+        currentFileType = validation.fileType;
+        
+        // Show file summary with enhanced info
+        showFileSummary(file);
+        
+        if (validation.fileType === 'image') {
+            displayImagePreview(file);
+        } else {
+            hideImagePreview();
+        }
+        
+        elements.passwordInput.disabled = false;
+        elements.passwordInput.focus();
+        updateButtonStates();
+        
+        logDebug('File processed successfully');
+        
+    } catch (error) {
+        logError('Error processing file:', error);
+        showError('Error al procesar el archivo.');
         hideImagePreview();
-        return;
+        clearFileSummary();
     }
-    if (!isImage && !isJSON) {
-        showStatus('Archivo no válido. Selecciona imagen o JSON.', 'error');
-        hideImagePreview();
-        return;
-    }
-    if (file.size === 0) {
-        showStatus('El archivo está vacío.', 'error');
-        hideImagePreview();
-        return;
-    }
-    if (file.size > 50 * 1024 * 1024) { // 50MB limit
-        showStatus('El archivo es demasiado grande (máx 50MB).', 'error');
-        hideImagePreview();
-        return;
-    }
-    currentFile = file;
-    currentFileType = isImage ? 'image' : 'json';
-    // Show file summary
-    showFileSummary(file);
-    if (isImage) displayImagePreview(file);
-    else hideImagePreview();
-    elements.passwordInput.disabled = false;
-    updateButtonStates();
 }
 
+/**
+ * Comprehensive file validation
+ */
+function validateFile(file) {
+    if (!file) {
+        return { isValid: false, error: 'No se seleccionó ningún archivo.' };
+    }
+
+    // Check forbidden extensions
+    if (CONFIG.FORBIDDEN_EXTENSIONS.test(file.name)) {
+        return { isValid: false, error: 'Tipo de archivo no permitido por seguridad.' };
+    }
+
+    // Check file size
+    if (file.size === 0) {
+        return { isValid: false, error: 'El archivo está vacío.' };
+    }
+
+    if (file.size > CONFIG.MAX_FILE_SIZE) {
+        const maxSizeMB = Math.round(CONFIG.MAX_FILE_SIZE / (1024 * 1024));
+        return { isValid: false, error: `El archivo es demasiado grande (máx ${maxSizeMB}MB).` };
+    }
+
+    // Determine file type
+    const isImage = file.type.startsWith('image/') || /\.(png|jpe?g|gif|bmp|webp)$/i.test(file.name);
+    const isJSON = file.type === 'application/json' || file.name.toLowerCase().endsWith('.json');
+
+    if (!isImage && !isJSON) {
+        return { isValid: false, error: 'Archivo no válido. Selecciona imagen o JSON.' };
+    }
+
+    // Additional image validation
+    if (isImage && !CONFIG.ALLOWED_IMAGE_TYPES.includes(file.type) && file.type) {
+        logDebug('Image type not in whitelist, but allowing based on extension');
+    }
+
+    return { 
+        isValid: true, 
+        fileType: isImage ? 'image' : 'json',
+        error: null 
+    };
+}
+
+/**
+ * Enhanced file summary display with accessibility
+ */
 function showFileSummary(file) {
     let summary = document.getElementById('fileSummary');
     if (!summary) {
         summary = document.createElement('div');
         summary.id = 'fileSummary';
+        summary.className = 'file-summary';
         summary.setAttribute('aria-live', 'polite');
-        summary.style.margin = '8px 0';
-        summary.style.fontSize = '0.98em';
+        summary.setAttribute('role', 'status');
         elements.dropZone.parentNode.insertBefore(summary, elements.dropZone.nextSibling);
     }
+    
     const type = file.type || 'Desconocido';
-    const size = (file.size / 1024).toFixed(1) + ' KB';
-    summary.innerHTML = `<strong>Archivo:</strong> ${escapeHTML(file.name)}<br><strong>Tamaño:</strong> ${size}<br><strong>Tipo:</strong> ${escapeHTML(type)}`;
+    const size = formatFileSize(file.size);
+    const lastModified = new Date(file.lastModified).toLocaleDateString();
+    
+    summary.innerHTML = `
+        <div class="file-info">
+            <div><strong>📁 Archivo:</strong> ${escapeHTML(file.name)}</div>
+            <div><strong>📊 Tamaño:</strong> ${size}</div>
+            <div><strong>🏷️ Tipo:</strong> ${escapeHTML(type)}</div>
+            <div><strong>📅 Modificado:</strong> ${lastModified}</div>
+        </div>
+    `;
     summary.style.display = 'block';
 }
 
+/**
+ * Clear file summary
+ */
+function clearFileSummary() {
+    const summary = document.getElementById('fileSummary');
+    if (summary) {
+        summary.style.display = 'none';
+        summary.innerHTML = '';
+    }
+}
+
+/**
+ * Format file size in human readable format
+ */
+function formatFileSize(bytes) {
+    if (bytes === 0) return '0 B';
+    const k = 1024;
+    const sizes = ['B', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+}
+
+/**
+ * Enhanced image preview with progressive loading and error handling
+ */
 function displayImagePreview(file) {
+    if (!file?.type?.startsWith('image/')) {
+        logError('Invalid file for preview');
+        return;
+    }
+
+    // Show loading state
+    showLoadingState('Cargando vista previa...');
+    
     const reader = new FileReader();
+    
+    reader.onloadstart = () => {
+        logDebug('Starting to read file for preview');
+    };
+    
+    reader.onprogress = (e) => {
+        if (e.lengthComputable) {
+            const percentLoaded = Math.round((e.loaded / e.total) * 100);
+            updateLoadingState(`Cargando vista previa... ${percentLoaded}%`);
+        }
+    };
+    
     reader.onload = e => {
-        const img = new Image();
-        img.onload = () => {
-            const canvas = elements.previewCanvas;
-            const ctx = canvas.getContext('2d');
-            let { width, height } = img;
-            const maxW = 400, maxH = 300;
-            // Rendimiento: Si la imagen es muy grande, muestra miniatura primero
-            if (width > 1200 || height > 900) {
-                width = Math.min(width, maxW);
-                height = Math.min(height, maxH);
-            } else {
-                if (width > maxW) { height *= maxW / width; width = maxW; }
-                if (height > maxH) { width *= maxH / height; height = maxH; }
-            }
-            canvas.width = width;
-            canvas.height = height;
-            ctx.drawImage(img, 0, 0, width, height);
-            elements.previewContainer.classList.add('active');
-        };
-        img.onerror = () => {
-            showStatus('No se pudo mostrar la imagen.', 'error');
+        try {
+            const img = new Image();
+            
+            img.onload = () => {
+                try {
+                    renderImageToCanvas(img);
+                    elements.previewContainer.classList.add('active');
+                    hideLoadingState();
+                    logDebug('Image preview rendered successfully');
+                } catch (error) {
+                    logError('Error rendering image to canvas:', error);
+                    showError('Error al mostrar la vista previa.');
+                    hideImagePreview();
+                    hideLoadingState();
+                }
+            };
+            
+            img.onerror = (error) => {
+                logError('Error loading image for preview:', error);
+                showError('No se pudo mostrar la imagen.');
+                hideImagePreview();
+                hideLoadingState();
+            };
+            
+            img.src = e.target.result;
+            
+        } catch (error) {
+            logError('Error processing image preview:', error);
+            showError('Error al procesar la vista previa.');
             hideImagePreview();
-        };
-        img.src = e.target.result;
+            hideLoadingState();
+        }
     };
-    reader.onerror = () => {
-        showStatus('Error al leer la imagen.', 'error');
+    
+    reader.onerror = (error) => {
+        logError('FileReader error:', error);
+        showError('Error al leer la imagen.');
         hideImagePreview();
+        hideLoadingState();
     };
+    
     reader.readAsDataURL(file);
+}
+
+/**
+ * Render image to canvas with performance optimization
+ */
+function renderImageToCanvas(img) {
+    const canvas = elements.previewCanvas;
+    const ctx = canvas.getContext('2d');
+    
+    let { width, height } = img;
+    const maxW = CONFIG.PREVIEW_MAX_WIDTH;
+    const maxH = CONFIG.PREVIEW_MAX_HEIGHT;
+    
+    // Performance optimization for large images
+    if (width * height > CONFIG.LARGE_IMAGE_THRESHOLD) {
+        // Use progressive scaling for very large images
+        const scale = Math.min(maxW / width, maxH / height, 0.5);
+        width *= scale;
+        height *= scale;
+    } else {
+        // Standard scaling
+        if (width > maxW) { height *= maxW / width; width = maxW; }
+        if (height > maxH) { width *= maxH / height; height = maxH; }
+    }
+    
+    canvas.width = width;
+    canvas.height = height;
+    
+    // Use smooth scaling
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+    
+    ctx.drawImage(img, 0, 0, width, height);
+}
+
+/**
+ * Loading state management
+ */
+function showLoadingState(message) {
+    let loadingEl = document.getElementById('loadingState');
+    if (!loadingEl) {
+        loadingEl = document.createElement('div');
+        loadingEl.id = 'loadingState';
+        loadingEl.className = 'loading-state';
+        loadingEl.setAttribute('aria-live', 'polite');
+        elements.previewContainer.parentNode.insertBefore(loadingEl, elements.previewContainer);
+    }
+    loadingEl.textContent = message;
+    loadingEl.style.display = 'block';
+}
+
+function updateLoadingState(message) {
+    const loadingEl = document.getElementById('loadingState');
+    if (loadingEl) {
+        loadingEl.textContent = message;
+    }
+}
+
+function hideLoadingState() {
+    const loadingEl = document.getElementById('loadingState');
+    if (loadingEl) {
+        loadingEl.style.display = 'none';
+    }
 }
 
 function hideImagePreview() {
@@ -230,40 +553,201 @@ function displayDecryptedImage(imageData) {
     }
 }
 
-// =================== ACCIONES ===================
+// =================== ENHANCED ACTIONS ===================
+/**
+ * Enhanced action handler with comprehensive error handling and performance monitoring
+ */
 function handleAction() {
-    if (!currentFile) return showStatus('No hay archivo seleccionado.', 'error');
-    const password = elements.passwordInput.value.trim();
-    if (currentFileType === 'image') {
-        if (password.length < 6) return showStatus('Contraseña mínima de 6 caracteres.', 'error');
+    if (isProcessing) {
+        logDebug('Action already in progress, ignoring');
+        return;
+    }
+
+    try {
+        if (!currentFile) {
+            showError('No hay archivo seleccionado.');
+            return;
+        }
+
+        const password = elements.passwordInput.value.trim();
+        
+        if (currentFileType === 'image') {
+            handleEncryption(password);
+        } else if (currentFileType === 'json') {
+            handleDecryption(password);
+        } else {
+            showError('Tipo de archivo no reconocido.');
+        }
+        
+    } catch (error) {
+        logError('Error in handleAction:', error);
+        showError('Error al procesar la acción.');
+        setProcessing(false);
+    }
+}
+
+/**
+ * Handle image encryption with validation and performance monitoring
+ */
+async function handleEncryption(password) {
+    try {
+        // Validate password
+        if (password.length < CONFIG.MIN_PASSWORD_LENGTH) {
+            showError(`Contraseña mínima de ${CONFIG.MIN_PASSWORD_LENGTH} caracteres.`);
+            elements.passwordInput.focus();
+            return;
+        }
+
+        // Additional password strength validation
+        if (!validatePasswordStrength(password)) {
+            showError('La contraseña debe contener al menos una letra y un número.');
+            elements.passwordInput.focus();
+            return;
+        }
+
+        logDebug('Starting encryption process');
+        performanceMetrics.startTime = Date.now();
+        
         setProcessing(true, 'encrypt');
-        elements.actionBtn.disabled = true;
-        elements.actionSpinner.classList.remove('hidden');
-        currentFile.arrayBuffer().then(buf => {
-            cryptoWorker.postMessage({ action: 'encrypt', data: { imageData: buf, password, mimeType: currentFile.type } });
-        }).catch(() => {
-            showStatus('Error al leer el archivo.', 'error');
-            setProcessing(false);
+        showStatus('Encriptando imagen...', 'info');
+
+        const buffer = await currentFile.arrayBuffer();
+        
+        cryptoWorker.postMessage({ 
+            action: 'encrypt', 
+            data: { 
+                imageData: buffer, 
+                password, 
+                mimeType: currentFile.type 
+            } 
         });
-    } else if (currentFileType === 'json') {
-        if (!password) return showStatus('Ingrese contraseña.', 'error');
+        
+    } catch (error) {
+        logError('Error in encryption process:', error);
+        showError('Error al leer el archivo para encriptar.');
+        setProcessing(false);
+    }
+}
+
+/**
+ * Handle file decryption with validation and performance monitoring
+ */
+async function handleDecryption(password) {
+    try {
+        if (!password) {
+            showError('Ingrese contraseña para desencriptar.');
+            elements.passwordInput.focus();
+            return;
+        }
+
+        logDebug('Starting decryption process');
+        performanceMetrics.startTime = Date.now();
+        
         setProcessing(true, 'decrypt');
-        elements.actionBtn.disabled = true;
-        elements.actionSpinner.classList.remove('hidden');
-        currentFile.text().then(txt => {
-            let data;
-            try {
-                data = JSON.parse(txt);
-            } catch {
-                showStatus('El archivo JSON está corrupto o no es válido.', 'error');
-                setProcessing(false);
-                return;
-            }
-            cryptoWorker.postMessage({ action: 'decrypt', data: { encryptedData: data, password } });
-        }).catch(() => {
-            showStatus('Error al leer el archivo JSON.', 'error');
+        showStatus('Desencriptando archivo...', 'info');
+
+        const text = await currentFile.text();
+        let data;
+        
+        try {
+            data = JSON.parse(text);
+        } catch (parseError) {
+            logError('JSON parse error:', parseError);
+            showError('El archivo JSON está corrupto o no es válido.');
             setProcessing(false);
+            return;
+        }
+
+        // Validate JSON structure
+        if (!validateEncryptedData(data)) {
+            showError('El archivo JSON no contiene datos encriptados válidos.');
+            setProcessing(false);
+            return;
+        }
+
+        cryptoWorker.postMessage({ 
+            action: 'decrypt', 
+            data: { 
+                encryptedData: data, 
+                password 
+            } 
         });
+        
+    } catch (error) {
+        logError('Error in decryption process:', error);
+        showError('Error al leer el archivo JSON.');
+        setProcessing(false);
+    }
+}
+
+/**
+ * Validate password strength
+ */
+function validatePasswordStrength(password) {
+    // Basic validation: at least one letter and one number
+    const hasLetter = /[a-zA-Z]/.test(password);
+    const hasNumber = /\d/.test(password);
+    return hasLetter && hasNumber;
+}
+
+/**
+ * Validate encrypted data structure
+ */
+function validateEncryptedData(data) {
+    return (
+        data &&
+        typeof data === 'object' &&
+        Array.isArray(data.salt) &&
+        Array.isArray(data.iv) &&
+        Array.isArray(data.encryptedData) &&
+        data.salt.length > 0 &&
+        data.iv.length > 0 &&
+        data.encryptedData.length > 0
+    );
+}
+
+// =================== UTILITIES ===================
+/**
+ * Enhanced HTML escaping for XSS prevention
+ */
+function escapeHTML(str) {
+    if (typeof str !== 'string') return '';
+    
+    return str.replace(/[&<>'"`]/g, function (c) {
+        return {
+            '&': '&amp;',
+            '<': '&lt;',
+            '>': '&gt;',
+            "'": '&#39;',
+            '"': '&quot;',
+            '`': '&#96;'
+        }[c];
+    });
+}
+
+/**
+ * Enhanced processing state management
+ */
+function setProcessing(state, type = '') {
+    try {
+        isProcessing = state;
+        elements.passwordInput.disabled = state;
+        elements.actionBtn.disabled = state;
+        elements.fileInput.disabled = state;
+        elements.actionSpinner.classList.toggle('hidden', !state);
+        
+        if (state) {
+            elements.actionBtnText.textContent = type === 'encrypt' ? 'Encriptando...' : 'Desencriptando...';
+            document.body.style.cursor = 'wait';
+        } else {
+            document.body.style.cursor = 'default';
+            updateButtonStates();
+        }
+        
+        logDebug(`Processing state changed to: ${state}`);
+        
+    } catch (error) {
+        logError('Error setting processing state:', error);
     }
 }
 
@@ -289,64 +773,151 @@ function downloadEncryptedFile(data) {
     URL.revokeObjectURL(url);
 }
 
-function resetApp() {
-    // Clear sensitive variables
-    currentFile = null;
-    currentFileType = null;
-    // Terminate worker for security
-    if (cryptoWorker) {
-        cryptoWorker.terminate();
-        cryptoWorker = null;
-    }
-    // Reset file input
-    elements.fileInput.value = '';
-    // Reset password input
-    elements.passwordInput.value = '';
-    elements.passwordInput.disabled = true;
-    // Hide preview
-    hideImagePreview();
-    // Hide file summary
-    const fileSummary = document.getElementById('fileSummary');
-    if (fileSummary) fileSummary.style.display = 'none';
-    // Hide status message
-    elements.statusMessage.textContent = '';
-    elements.statusMessage.className = 'status-message';
-    elements.statusMessage.style.display = 'none';
-    // Reset action button
-    elements.actionBtn.disabled = true;
-    elements.actionBtnText.textContent = 'Encriptar';
-    // Hide spinner
-    elements.actionSpinner.classList.add('hidden');
-    // Optionally reset drag-over state
-    elements.dropZone.classList.remove('drag-over');
-    // Show initial status
-    showStatus('Aplicación lista. Selecciona una imagen o archivo JSON.', 'info');
-    // Re-initialize worker
-    initializeWorker();
+// =================== ENHANCED STATUS MANAGEMENT ===================
+/**
+ * Show success message with accessibility
+ */
+function showSuccess(message) {
+    showStatus(message, 'success');
 }
 
-// =================== UTILIDADES ===================
-function escapeHTML(str) {
-    return str.replace(/[&<>'"`]/g, function (c) {
-        return {
-            '&': '&amp;',
-            '<': '&lt;',
-            '>': '&gt;',
-            "'": '&#39;',
-            '"': '&quot;',
-            '`': '&#96;'
-        }[c];
-    });
+/**
+ * Show error message with accessibility and logging
+ */
+function showError(message) {
+    logError('User facing error:', message);
+    showStatus(message, 'error');
 }
 
+/**
+ * Enhanced status display with better UX
+ */
 function showStatus(msg, type) {
-    elements.statusMessage.textContent = escapeHTML(msg);
-    elements.statusMessage.className = `status-message status-${type}`;
-    elements.statusMessage.style.display = 'block';
-    elements.statusMessage.setAttribute('aria-live', type === 'error' ? 'assertive' : 'polite');
-    elements.statusMessage.setAttribute('role', 'alert');
-    elements.statusMessage.tabIndex = 0;
-    elements.statusMessage.focus();
+    try {
+        elements.statusMessage.textContent = escapeHTML(msg);
+        elements.statusMessage.className = `status-message status-${type}`;
+        elements.statusMessage.style.display = 'block';
+        elements.statusMessage.setAttribute('aria-live', type === 'error' ? 'assertive' : 'polite');
+        elements.statusMessage.setAttribute('role', 'alert');
+        elements.statusMessage.tabIndex = 0;
+        
+        // Auto-focus for screen readers
+        if (type === 'error') {
+            elements.statusMessage.focus();
+        }
+        
+        // Auto-hide success messages after delay
+        if (type === 'success') {
+            setTimeout(() => {
+                if (elements.statusMessage.className.includes('status-success')) {
+                    elements.statusMessage.style.opacity = '0.7';
+                }
+            }, 3000);
+        }
+        
+        logDebug(`Status displayed: ${type} - ${msg}`);
+        
+    } catch (error) {
+        logError('Error displaying status:', error);
+    }
+}
+
+// =================== ENHANCED RESET AND SECURITY ===================
+/**
+ * Comprehensive application reset with security focus
+ */
+function resetApp() {
+    try {
+        logDebug('Resetting application state');
+        
+        // Clear sensitive variables immediately
+        currentFile = null;
+        currentFileType = null;
+        isProcessing = false;
+        
+        // Terminate worker for security (prevent memory leaks)
+        if (cryptoWorker) {
+            cryptoWorker.terminate();
+            cryptoWorker = null;
+            logDebug('Crypto worker terminated');
+        }
+        
+        // Clear all UI elements
+        elements.fileInput.value = '';
+        elements.passwordInput.value = '';
+        elements.passwordInput.disabled = true;
+        
+        // Clear file summary and preview
+        hideImagePreview();
+        clearFileSummary();
+        hideLoadingState();
+        
+        // Reset status
+        elements.statusMessage.textContent = '';
+        elements.statusMessage.className = 'status-message';
+        elements.statusMessage.style.display = 'none';
+        elements.statusMessage.style.opacity = '1';
+        
+        // Reset button states
+        elements.actionBtn.disabled = true;
+        elements.actionBtnText.textContent = 'Encriptar';
+        elements.actionSpinner.classList.add('hidden');
+        
+        // Clear drag states
+        elements.dropZone.classList.remove('drag-over');
+        
+        // Force garbage collection hint
+        if (window.gc) {
+            window.gc();
+        }
+        
+        // Re-initialize worker
+        initializeWorker();
+        
+        // Show ready state
+        setTimeout(() => {
+            showStatus('Aplicación lista. Selecciona una imagen o archivo JSON.', 'info');
+        }, 100);
+        
+        logDebug('Application reset completed');
+        
+    } catch (error) {
+        logError('Error during app reset:', error);
+        // Fallback: reload page if reset fails
+        setTimeout(() => {
+            window.location.reload();
+        }, 1000);
+    }
+}
+
+// =================== LOGGING AND DEBUGGING ===================
+/**
+ * Development logging (removed in production build)
+ */
+function logDebug(...args) {
+    if (typeof DEBUG !== 'undefined' && DEBUG) {
+        console.log('[ImageLocker Debug]', ...args);
+    }
+}
+
+/**
+ * Error logging (always enabled)
+ */
+function logError(...args) {
+    console.error('[ImageLocker Error]', ...args);
+    
+    // In production, you might want to send to error tracking service
+    // sendToErrorTracking(args);
+}
+
+/**
+ * Performance logging
+ */
+function logPerformance(operation, duration) {
+    logDebug(`Performance: ${operation} took ${duration}ms`);
+    
+    // In production, send to analytics
+    // sendPerformanceMetric(operation, duration);
 }
 
 function updateButtonStates() {
@@ -367,14 +938,6 @@ function togglePasswordVisibility() {
     const isPass = elements.passwordInput.type === 'password';
     elements.passwordInput.type = isPass ? 'text' : 'password';
     elements.passwordToggle.textContent = isPass ? '🙈' : '👁️';
-}
-
-function setProcessing(state, type = '') {
-    elements.passwordInput.disabled = state;
-    elements.actionBtn.disabled = state;
-    elements.fileInput.disabled = state;
-    elements.actionSpinner.classList.toggle('hidden', !state);
-    if (!state) updateButtonStates();
 }
 
 function initializeTheme() {

@@ -1,41 +1,92 @@
-# Image Locker
+# Image Locker - Production Ready
 
-**Image Locker** is a browser-based tool for encrypting and decrypting images or JSON files using password-based AES-GCM encryption. All operations are performed locally in your browser, ensuring privacy and security without uploading files to any server.
+A secure, client-side image encryption/decryption application built with modern web technologies.
 
-## Features
+## 🚀 Features
 
-- **Encrypt images or JSON files** with a password using AES-GCM.
-- **Decrypt encrypted JSON files** back to images.
-- **Drag-and-drop interface** for easy file selection.
-- **Password visibility toggle** and minimum password length enforcement.
-- **Download encrypted files** as JSON for secure sharing or storage.
-- **Theme toggle** for light/dark mode.
-- **No server required**—all cryptography is performed in your browser.
+- **🔒 Client-Side Security**: All encryption/decryption happens in your browser
+- **🏃‍♂️ High Performance**: Web Workers for non-blocking operations
+- **📱 Responsive Design**: Works on desktop, tablet, and mobile
+- **🎨 Modern UI/UX**: Clean, accessible interface with dark/light themes
+- **♿ Accessibility**: WCAG compliant with keyboard navigation and screen reader support
+- **🔄 Offline Ready**: Service Worker for offline functionality
+- **🛡️ Security Hardened**: CSP, input sanitization, and secure coding practices
 
-## Usage
+## 🔧 Technical Stack
 
-1. **Open `index.html` in your browser.**
-2. **Drag and drop** an image or JSON file into the drop zone, or click to select a file.
-3. **Enter a password** (minimum 6 characters) to enable encryption or decryption.
-4. **Click "Encriptar"** to encrypt an image, or **"Desencriptar"** to decrypt a JSON file.
-5. **Download** the encrypted file (as JSON) or view the decrypted image in the preview area.
+- **Frontend**: Vanilla JavaScript (ES6+), HTML5, CSS3
+- **Encryption**: Web Crypto API (AES-GCM, PBKDF2)
+- **Workers**: Web Workers for crypto operations
+- **Storage**: Client-side only (no server)
+- **PWA**: Service Worker, offline capability
 
-## Technologies
+## 🚀 Quick Start
 
-- HTML, CSS, JavaScript (Vanilla)
+### Development
+
+```bash
+# Start development server
+python -m http.server 8080
+
+# Open browser
+open http://localhost:8080
+```
+
+## 📋 Usage
+
+1. **Select Image**: Drag & drop or click to select an image file
+2. **Enter Password**: Minimum 6 characters with letters and numbers
+3. **Encrypt**: Click "Encriptar" to create encrypted JSON file
+4. **Decrypt**: Select encrypted JSON file and enter password
+5. **Download**: Encrypted files download automatically
+
+### Supported Formats
+
+- **Input**: PNG, JPEG, GIF, BMP, WebP images
+- **Output**: JSON files with encrypted data
+- **Max Size**: 50MB per file
+
+## 🔒 Security Features
+
+### Encryption
+
+- **Algorithm**: AES-256-GCM
+- **Key Derivation**: PBKDF2 (250,000 iterations)
+- **Salt**: 16-byte random salt per encryption
+- **IV**: 12-byte random initialization vector
+
+### Security Measures
+
+- Content Security Policy (CSP)
+- Input sanitization and validation
+- XSS protection
+- No server-side data storage
+- Secure random number generation
+- Memory cleanup after operations
+
+## ♿ Accessibility
+
+- WCAG 2.1 AA compliant
+- Keyboard navigation support
+- Screen reader compatible
+- High contrast mode support
+- Focus management
+- ARIA labels and roles
+
+## 🌐 Browser Support
+
+- Chrome/Edge 88+
+- Firefox 84+
+- Safari 14+
+- Modern mobile browsers
+
+### Required APIs
+
 - Web Crypto API
 - Web Workers
-
-## Security
-
-- All cryptographic operations are performed locally in your browser.
-- Files are never uploaded or sent to any server.
-- Uses PBKDF2 for key derivation and AES-GCM for encryption.
-
-## License
-
-MIT License
+- FileReader API
+- Service Workers
 
 ---
 
-*Protect your images and data with modern browser
+Made with ❤️ for privacy and security

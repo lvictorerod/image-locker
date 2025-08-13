@@ -1,0 +1,62 @@
+{
+  "name": "image-locker",
+  "version": "1.0.0",
+  "description": "Secure client-side image encryption/decryption application",
+  "main": "index.html",
+  "scripts": {
+    "start": "python -m http.server 8080",
+    "dev": "python -m http.server 8080 --directory .",
+    "build": "node scripts/build.js",
+    "test": "node scripts/test.js",
+    "lint": "eslint *.js",
+    "format": "prettier --write *.js *.html *.css",
+    "validate": "html-validate index.html",
+    "audit": "node scripts/security-audit.js",
+    "deploy": "node scripts/deploy.js"
+  },
+  "keywords": [
+    "encryption",
+    "image",
+    "security",
+    "client-side",
+    "web-crypto-api",
+    "offline-first",
+    "pwa"
+  ],
+  "author": "Image Locker Team",
+  "license": "MIT",
+  "dependencies": {},
+  "devDependencies": {
+    "eslint": "^8.0.0",
+    "prettier": "^2.8.0",
+    "html-validate": "^7.0.0"
+  },
+  "engines": {
+    "node": ">=16.0.0"
+  },
+  "browserslist": [
+    "last 2 Chrome versions",
+    "last 2 Firefox versions",
+    "last 2 Safari versions",
+    "last 2 Edge versions"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yourusername/image-locker.git"
+  },
+  "bugs": {
+    "url": "https://github.com/yourusername/image-locker/issues"
+  },
+  "homepage": "https://yourusername.github.io/image-locker",
+  "config": {
+    "build": {
+      "outputDir": "dist",
+      "minify": true,
+      "sourceMaps": false
+    },
+    "security": {
+      "csp": true,
+      "integrity": true
+    }
+  }
+}
